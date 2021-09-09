@@ -41,7 +41,8 @@ async function crawl_entities(url) {
 }
 
 exports.handler = async function(event, context) {
-  url="http://synaptic.io/";
+  const queryParams = event.queryStringParameters;
+  url = queryParams.url;
   const browser = await playwright.chromium.launch({
       headless: true 
   });
