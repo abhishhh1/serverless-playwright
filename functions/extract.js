@@ -13,7 +13,7 @@ const ENTITY_FORMATS = {
   app_store: 'itunes.apple.com/'
 };
 
-const ENTITY_REGEX = {
+const ENTITY_REGEX ={
   linkedin: ['linkedin', 'Linkedin'],
   facebook: ['facebook', 'Facebook'],
   twitter: ['twitter', 'Twitter'],
@@ -23,12 +23,12 @@ const ENTITY_REGEX = {
   github: ['github', 'Github', 'Git', 'git', 'repo'],
   play_store: ['play','Play', 'android', 'Android'],
   app_store: ['app', 'App', 'apple', 'Apple', 'iOS', 'ios', 'IOS'],
-  apple_store: ['apple']
+  apple_store: ['app', 'App', 'apple', 'Apple', 'iOS', 'ios', 'IOS']
 };
 
 async function crawl_entities(url) {
     const browser = await playwright.chromium.launch({
-        headless: false
+        headless: true
     });
 
     const context = await browser.newContext({
