@@ -15,7 +15,7 @@ const ENTITY_FORMATS = {
 
 const ENTITY_REGEX = {
     linkedin: ['linkedin', 'Linkedin'],
-    facebook: ['facebook', 'Facebook'],
+    facebook: ['facebook', 'Facebook', 'fb', 'FB'],
     twitter: ['twitter', 'Twitter'],
     instagram: ['instagram', 'Instagram'],
     youtube: ['youtube', 'Youtube'],
@@ -67,7 +67,7 @@ function extract_urls(key, value, browser, page) {
             }
         }
         if (hrefs.length > 0) {
-            resolve(...new Set(hrefs));
+            resolve(hrefs);
         }
         else {
             reject(fetch_from_click_on_popup);
@@ -75,7 +75,7 @@ function extract_urls(key, value, browser, page) {
     });
 }
 
-function fetch_from_click_on_popup(key, value, browser, page) {
+function fetch_from_click_on_popup(key, value, page) {
     return new Promise(async (resolve, reject) => {
         var has_error = false;
         var hrefs = [];
@@ -102,7 +102,7 @@ function fetch_from_click_on_popup(key, value, browser, page) {
             }
         }
         if (!has_error) {
-            resolve(...new Set(hrefs));
+            resolve(hrefs);
         }
         else {
             reject(fetch_from_click_on_navigation);
@@ -110,7 +110,7 @@ function fetch_from_click_on_popup(key, value, browser, page) {
     });
 }
 
-function fetch_from_click_on_navigation(key, value, browser, page) {
+function fetch_from_click_on_navigation(key, value, page) {
     return new Promise(async (resolve, reject) => {
         for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
             var hrefs = [];
@@ -132,13 +132,13 @@ function fetch_from_click_on_navigation(key, value, browser, page) {
                 catch (TimeoutError) { }
             }
         }
-        resolve(...new Set(hrefs));
+        resolve(hrefs);
     });
 }
 
 async function extract(url) {
     const browser = await playwright.chromium.launch({
-        headless: false
+        headless: true
     });
 
     const context = await browser.newContext({
@@ -162,21 +162,21 @@ async function extract(url) {
         await Promise.all([
             extract_urls(key, value, browser, page)
         ]).then((hrefs) => {
-            entities[key] = hrefs;
+            entities[key] = [...new Set(hrefs[0])];
         })
         .catch(async (callback) => {
             await Promise.all([
-                callback(key, value, browser, page)
+                callback(key, value, page)
             ])
             .then((hrefs) => {
-                entities[key] = hrefs;
+                entities[key] = [...new Set(hrefs[0])];
             })
             .catch(async (callback) => {
                 await Promise.all([
-                    callback(key, value, browser, page)
+                    callback(key, value, page)
                 ])
                 .then((hrefs) => {
-                    entities[key] = hrefs;
+                    entities[key] = [...new Set(hrefs[0])];
                 })
             });
         })
@@ -193,4 +193,4 @@ async function extract(url) {
     await browser.close();
 }
 
-extract("https://grofers.com/");
+extract("https://cure.fit/");
