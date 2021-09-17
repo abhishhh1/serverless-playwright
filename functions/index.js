@@ -56,7 +56,10 @@ function extract_urls(key, value, browser, page) {
                     const elementHref = await element.getAttribute('href');
                     if (elementHref && elementHref.startsWith("http")) {
                         const new_page = await browser.newPage();
-                        await new_page.goto(elementHref);
+                        await new_page.goto(elementHref, {waitUntil: 'networkidle'});
+                        try{
+                            await new_page.waitForNavigation({timeout: 5000});
+                        }catch(TimeoutError){}
                         let page_url = await new_page.url();
                         if (page_url.includes(value)) {
                             hrefs.push(page_url);
@@ -90,7 +93,6 @@ function fetch_from_click_on_popup(key, value, page) {
                         page.click(image_css, { force: true, timeout: 2000 })
                     ]);
                     let page_url = new_page.url();
-                    console.log
                     if (page_url.includes(value)) {
                         hrefs.push(page_url);
                     }
@@ -138,7 +140,7 @@ function fetch_from_click_on_navigation(key, value, page) {
 
 async function extract(url) {
     const browser = await playwright.chromium.launch({
-        headless: true
+        headless: false
     });
 
     const context = await browser.newContext({
@@ -149,7 +151,7 @@ async function extract(url) {
 
     const page = await browser.newPage();
     page.setDefaultTimeout(60000);
-    const response = await page.goto(url);
+    const response = await page.goto(url, { waitUntil: 'networkidle' });
 
     await page.on('dialog', async (dialog) => {
         await dialog.dismiss();
@@ -193,4 +195,4 @@ async function extract(url) {
     await browser.close();
 }
 
-extract("https://cure.fit/");
+extract("https://glowroad.com/");
