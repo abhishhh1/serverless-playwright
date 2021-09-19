@@ -26,7 +26,7 @@ const ENTITY_REGEX = {
     apple_store: ['app', 'App', 'apple', 'Apple', 'iOS', 'ios', 'IOS']
 };
 
-function redirection_chain(url, response) {
+function redirectionChain(url, response) {
     response = response.request()
     redirections = [response.url()]
     while (response.url() != url) {
@@ -36,14 +36,14 @@ function redirection_chain(url, response) {
     return redirections;
 }
 
-function extract_urls(key, value, browser, page) {
+function extractUrls(key, value, browser, page) {
     return new Promise(async (resolve, reject) => {
-        const href_css = '[href*="' + value + '"]';
-        var hrefs = await page.$$eval(href_css, as => as.map(tag => tag.getAttribute('href')));
+        const hrefCSS = '[href*="' + value + '"]';
+        var hrefs = await page.$$eval(hrefCSS, as => as.map(tag => tag.getAttribute('href')));
         if (hrefs.length == 0) {
             for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
-                const image_css = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
-                let element = await page.$(image_css);
+                const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
+                let element = await page.$(imageCSS);
                 if (element) {
                     var tag = await element.evaluate(e => e.tagName);
                     while (tag != 'A') {
@@ -55,16 +55,16 @@ function extract_urls(key, value, browser, page) {
                     }
                     const elementHref = await element.getAttribute('href');
                     if (elementHref && elementHref.startsWith("http")) {
-                        const new_page = await browser.newPage();
-                        await new_page.goto(elementHref, {waitUntil: 'networkidle'});
+                        const newPage = await browser.newPage();
+                        await newPage.goto(elementHref, {waitUntil: 'networkidle'});
                         try{
-                            await new_page.waitForNavigation({timeout: 5000});
+                            await newPage.waitForNavigation({timeout: 5000});
                         }catch(TimeoutError){}
-                        let page_url = await new_page.url();
-                        if (page_url.includes(value)) {
-                            hrefs.push(page_url);
+                        let pageUrl = await newPage.url();
+                        if (pageUrl.includes(value)) {
+                            hrefs.push(pageUrl);
                         }
-                        await new_page.close();
+                        await newPage.close();
                     }
                 }
             }
@@ -73,63 +73,63 @@ function extract_urls(key, value, browser, page) {
             resolve(hrefs);
         }
         else {
-            reject(fetch_from_click_on_popup);
+            reject(fetchFromClickOnPopup);
         }
     });
 }
 
-function fetch_from_click_on_popup(key, value, page) {
+function fetchFromClickOnPopup(key, value, page) {
     return new Promise(async (resolve, reject) => {
-        var has_error = false;
+        var hasError = false;
         var hrefs = [];
         for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
-            const image_css = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
-            let element = await page.$(image_css);
+            const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
+            let element = await page.$(imageCSS);
             if (element) {
                 try {
                     //click on the image element with popup
-                    const [new_page] = await Promise.all([
+                    const [newPage] = await Promise.all([
                         page.waitForEvent('popup', { timeout: 15000 }),
-                        page.click(image_css, { force: true, timeout: 2000 })
+                        page.click(imageCSS, { force: true, timeout: 2000 })
                     ]);
-                    let page_url = new_page.url();
-                    if (page_url.includes(value)) {
-                        hrefs.push(page_url);
+                    let pageUrl = newPage.url();
+                    if (pageUrl.includes(value)) {
+                        hrefs.push(pageUrl);
                     }
-                    await new_page.close();
+                    await newPage.close();
                 }
                 catch (TimeoutError) {
-                    has_error = true;
+                    hasError = true;
                 }
             }
         }
-        if (!has_error) {
+        if (!hasError) {
             resolve(hrefs);
         }
         else {
-            reject(fetch_from_click_on_navigation);
+            reject(fetchFromClickOnNavigation);
         }
     });
 }
 
-function fetch_from_click_on_navigation(key, value, page) {
+function fetchFromClickOnNavigation(key, value, page) {
     return new Promise(async (resolve, reject) => {
         for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
             var hrefs = [];
-            const image_css = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
-            var element = await page.$(image_css);
+            const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
+            var element = await page.$(imageCSS);
             if (element) {
                 try {
                     //click on the image element with popup
-                    const [new_page] = await Promise.all([
+                    const [newPage] = await Promise.all([
                         page.waitForNavigation({ timeout: 15000 }),
-                        page.click(image_css, { force: true, timeout: 2000 })
+                        page.click(imageCSS, { force: true, timeout: 2000 })
                     ]);
-                    let page_url = new_page.url();
-                    if (page_url.includes(value)) {
-                        hrefs.push(page_url);
+                    let pageUrl = newPage.url();
+                    if (pageUrl.includes(value)) {
+                        hrefs.push(pageUrl);
                     }
-                    await new_page.close();
+                    await newPage.close();
                 }
                 catch (TimeoutError) { }
             }
@@ -157,12 +157,12 @@ async function extract(url) {
         await dialog.dismiss();
     });
 
-    const chain = redirection_chain(url, response);
+    const chain = redirectionChain(url, response);
 
     var entities = {};
     for (const [key, value] of Object.entries(ENTITY_FORMATS)) {
         await Promise.all([
-            extract_urls(key, value, browser, page)
+            extractUrls(key, value, browser, page)
         ]).then((hrefs) => {
             entities[key] = [...new Set(hrefs[0])];
         })
@@ -195,4 +195,4 @@ async function extract(url) {
     await browser.close();
 }
 
-extract("https://glowroad.com/");
+extract("https://grofers.com/");
