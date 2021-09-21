@@ -56,9 +56,10 @@ function extractUrls(key, value, browser, page) {
                     const elementHref = await element.getAttribute('href');
                     if (elementHref && elementHref.startsWith("http")) {
                         const newPage = await browser.newPage();
-                        await newPage.goto(elementHref, {waitUntil: 'networkidle'});
+                        newPage.setDefaultTimeout(0);
+                        await newPage.goto(elementHref);
                         try{
-                            await newPage.waitForNavigation({timeout: 5000});
+                            await newPage.waitForNavigation({timeout: 2000});
                         }catch(TimeoutError){}
                         let pageUrl = await newPage.url();
                         if (pageUrl.includes(value)) {
@@ -150,7 +151,7 @@ async function extract(url) {
     })
 
     const page = await browser.newPage();
-    page.setDefaultTimeout(60000);
+    page.setDefaultTimeout(0);
     const response = await page.goto(url, { waitUntil: 'networkidle' });
 
     await page.on('dialog', async (dialog) => {
@@ -195,4 +196,4 @@ async function extract(url) {
     await browser.close();
 }
 
-extract("https://grofers.com/");
+extract("https://glowroad.com/");
