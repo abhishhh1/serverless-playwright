@@ -36,47 +36,51 @@ function redirectionChain(url, response) {
     return redirections;
 }
 
-function extractFromUrls(browser, page) {
+function extractUrls(key, value, browser, page) {
     return new Promise(async (resolve, reject) => {
-        try{
-            var entities={};
-            var elementHrefs = await page.$$eval('a', as => as.map(tag => tag.getAttribute('href') || '#'));
-            for (var i = 0; i < elementHrefs.length; i++) {
-                var matched = false;
-                for (const [key, value] of Object.entries(ENTITY_FORMATS)) {
-                    entities[key] ||= [];
-                    if (elementHrefs[i].includes(value)) {
-                        entities[key].push(elementHrefs[i]);
-                        matched = true;
-                    }
-                }
-                if (matched) continue
-                if (elementHrefs[i] && elementHrefs[i].startsWith("http") && !elementHrefs[i].startsWith(page.url())) {
-                    const newPage = await browser.newPage();
-                    newPage.setDefaultTimeout(0);
-                    try{
-                        await newPage.goto(elementHrefs[i]);
-                        await newPage.waitForNavigation({timeout: 2000});
-                    }catch(error){}
-                    let pageUrl = await newPage.url();
-                    for (const [key, value] of Object.entries(ENTITY_FORMATS)) {
-                        if (pageUrl.includes(value)) {
-                            entities[key].push(pageUrl);
+        const hrefCSS = '[href*="' + value + '"]';
+        var hrefs = await page.$$eval(hrefCSS, as => as.map(tag => tag.getAttribute('href')));
+        if (hrefs.length == 0) {
+            for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
+                const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
+                let element = await page.$(imageCSS);
+                if (element) {
+                    var tag = await element.evaluate(e => e.tagName);
+                    while (tag != 'A') {
+                        element = await element.$('xpath=..');
+                        tag = await element.evaluate(e => e.tagName);
+                        if (tag == 'BODY') {
+                            break;
                         }
                     }
-                    await newPage.close();
+                    const elementHref = await element.getAttribute('href');
+                    if (elementHref && elementHref.startsWith("http")) {
+                        const newPage = await browser.newPage();
+                        await newPage.goto(elementHref, {waitUntil: 'networkidle'});
+                        try{
+                            await newPage.waitForNavigation({timeout: 5000});
+                        }catch(TimeoutError){}
+                        let pageUrl = await newPage.url();
+                        if (pageUrl.includes(value)) {
+                            hrefs.push(pageUrl);
+                        }
+                        await newPage.close();
+                    }
                 }
             }
-            resolve(entities);
         }
-        catch(error){
-            reject("Something went wrong!!");
+        if (hrefs.length > 0) {
+            resolve(hrefs);
+        }
+        else {
+            reject(fetchFromClickOnPopup);
         }
     });
 }
 
-function fetchFromClick(key, value, page) {
+function fetchFromClickOnPopup(key, value, page) {
     return new Promise(async (resolve, reject) => {
+        var hasError = false;
         var hrefs = [];
         for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
             const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
@@ -94,7 +98,40 @@ function fetchFromClick(key, value, page) {
                     }
                     await newPage.close();
                 }
-                catch (TimeoutError) {}
+                catch (TimeoutError) {
+                    hasError = true;
+                }
+            }
+        }
+        if (!hasError) {
+            resolve(hrefs);
+        }
+        else {
+            reject(fetchFromClickOnNavigation);
+        }
+    });
+}
+
+function fetchFromClickOnNavigation(key, value, page) {
+    return new Promise(async (resolve, reject) => {
+        for (var i = 0; i < ENTITY_REGEX[key].length; i++) {
+            var hrefs = [];
+            const imageCSS = 'img[alt*="' + ENTITY_REGEX[key][i] + '"]';
+            var element = await page.$(imageCSS);
+            if (element) {
+                try {
+                    //click on the image element with popup
+                    const [newPage] = await Promise.all([
+                        page.waitForNavigation({ timeout: 15000 }),
+                        page.click(imageCSS, { force: true, timeout: 2000 })
+                    ]);
+                    let pageUrl = newPage.url();
+                    if (pageUrl.includes(value)) {
+                        hrefs.push(pageUrl);
+                    }
+                    await newPage.close();
+                }
+                catch (TimeoutError) { }
             }
         }
         resolve(hrefs);
@@ -113,7 +150,7 @@ async function extract(url) {
     })
 
     const page = await browser.newPage();
-    page.setDefaultTimeout(0);
+    page.setDefaultTimeout(60000);
     const response = await page.goto(url, { waitUntil: 'networkidle' });
 
     await page.on('dialog', async (dialog) => {
@@ -123,25 +160,29 @@ async function extract(url) {
     const chain = redirectionChain(url, response);
 
     var entities = {};
-    await Promise.all([
-        extractFromUrls(browser, page)
-    ]).then(async (data) => {
-        entities = data[0];
-        for (const [key, value] of Object.entries(ENTITY_FORMATS)) {
-            if(entities[key].length == 0){
-                Promise.all(
-                    await fetchFromClick(key,value,page)
-                ).then((hrefs) => {
-                    entities[key] = [...new Set(hrefs)];
+    for (const [key, value] of Object.entries(ENTITY_FORMATS)) {
+        await Promise.all([
+            extractUrls(key, value, browser, page)
+        ]).then((hrefs) => {
+            entities[key] = [...new Set(hrefs[0])];
+        })
+        .catch(async (callback) => {
+            await Promise.all([
+                callback(key, value, page)
+            ])
+            .then((hrefs) => {
+                entities[key] = [...new Set(hrefs[0])];
+            })
+            .catch(async (callback) => {
+                await Promise.all([
+                    callback(key, value, page)
+                ])
+                .then((hrefs) => {
+                    entities[key] = [...new Set(hrefs[0])];
                 })
-            }
-            else{
-                entities[key] = [...new Set(entities[key])];
-            }
-        }
-    }).catch((message) =>{
-        console.log(message);
-    })
+            });
+        })
+    }
 
     //modify entities
     entities['redirection_chain'] = chain;
@@ -154,4 +195,4 @@ async function extract(url) {
     await browser.close();
 }
 
-extract("http://glowroad.com/");
+extract("https://grofers.com/");
